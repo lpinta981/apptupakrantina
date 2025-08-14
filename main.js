@@ -1,3 +1,9 @@
+// --- VERIFICACIÓN DE SEGURIDAD INICIAL ---
+// Si el usuario no ha iniciado sesión, lo redirige a la página de login.
+if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+    window.location.href = 'login.html';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURACIÓN ---
     const API_URL = 'https://script.google.com/macros/s/AKfycbxlZrCscxBTkC54oDpQfns3f6-rD2gY54oSBg4Ufdrnz2XekO39FTg_3PH3cbrgBGXlzg/exec';
@@ -7,24 +13,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('contenido-principal');
     const moduleTitle = document.getElementById('module-title');
     const navLinks = document.querySelectorAll('.nav-link');
+    const screenBlocker = document.getElementById('screen-blocker');
+    const logoutBtn = document.getElementById('logout-btn');
 
-    // --- NAVEGACIÓN Y CARGA DE MÓDULOS ---
-    const loadModule = async (moduleName) => {
-        try {
-            const response = await fetch(`${moduleName}.html`);
-            if (!response.ok) throw new Error(`No se pudo cargar el módulo: ${moduleName}`);
-            
-            mainContent.innerHTML = await response.text();
-            moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
-            
-            // Llama a la función de inicialización específica del módulo
-            if (moduleName === 'socios') initSociosModule();
+    // --- MANEJO DE EVENTOS ---
+    
+    // Evento para cerrar sesión
+    logoutBtn.addEventListener('click', () => {
+        sessionStorage.removeItem('isLoggedIn');
+        window.location.href = 'login.html';
+    });
 
-        } catch (error) {
-            mainContent.innerHTML = `<p class="text-red-500">Error al cargar el módulo: ${error.message}</p>`;
-        }
-    };
-
+    // Eventos para la navegación de módulos
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -36,6 +36,22 @@ document.addEventListener('DOMContentLoaded', () => {
             loadModule(module);
         });
     });
+
+    // --- NAVEGACIÓN Y CARGA DE MÓDULOS ---
+    const loadModule = async (moduleName) => {
+        try {
+            const response = await fetch(`${moduleName}.html`);
+            if (!response.ok) throw new Error(`No se pudo cargar el módulo: ${moduleName}`);
+            
+            mainContent.innerHTML = await response.text();
+            moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
+            
+            if (moduleName === 'socios') initSociosModule();
+
+        } catch (error) {
+            mainContent.innerHTML = `<p class="text-red-500">Error al cargar el módulo: ${error.message}</p>`;
+        }
+    };
 
     // --- LÓGICA DEL MÓDULO DE SOCIOS ---
     const initSociosModule = () => {
@@ -49,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const closeModal = () => {
             modal.classList.replace('flex', 'hidden');
             socioForm.reset();
-            document.getElementById('ID_Socio').value = ''; // Limpiar ID oculto
+            document.getElementById('ID_Socio').value = '';
         };
 
         addSocioBtn.addEventListener('click', () => {
@@ -108,7 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
             tableBody.appendChild(tr);
         });
 
-        // Añadir listeners a los nuevos botones de editar
         document.querySelectorAll('.edit-btn').forEach(button => {
             button.addEventListener('click', (e) => {
                 const socioId = e.target.dataset.socioId;
@@ -126,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('nombres').value = socio.Nombres_Completos;
         document.getElementById('apellidos').value = socio.Apellidos_Completos;
         document.getElementById('cedula').value = socio.Cedula_Identidad;
-        // Formatear la fecha para el input type="date"
         document.getElementById('fechaNacimiento').value = socio.Fecha_Nacimiento ? new Date(socio.Fecha_Nacimiento).toISOString().split('T')[0] : '';
         document.getElementById('telefono').value = socio.Telefono_Celular;
         document.getElementById('email').value = socio.Correo_Electronico;
@@ -137,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleSocioSubmit = async (e) => {
         e.preventDefault();
+        screenBlocker.classList.remove('hidden'); // Acción: Mostrar bloqueador
         const form = e.target;
         const id = form.querySelector('#ID_Socio').value;
 
@@ -154,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             token: SECRET_TOKEN,
             ruta: id ? 'updateSocio' : 'addSocio',
-            data: id ? socioData : { // Para añadir, no enviamos el ID vacío
+            data: id ? socioData : {
                 nombres: socioData.Nombres_Completos,
                 apellidos: socioData.Apellidos_Completos,
                 cedula: socioData.Cedula_Identidad,
@@ -168,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Requerido por Apps Script
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
             });
             const result = await response.json();
@@ -177,13 +192,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             document.getElementById('socio-modal').classList.replace('flex', 'hidden');
             form.reset();
-            loadSocios(); // Recargar la lista de socios
+            loadSocios();
 
         } catch (error) {
             alert(`Error al guardar: ${error.message}`);
+        } finally {
+            screenBlocker.classList.add('hidden'); // Acción: Ocultar bloqueador
         }
     };
 
     // --- INICIALIZACIÓN ---
-    document.getElementById('nav-socios').click(); // Cargar el módulo de socios por defecto
+    document.getElementById('nav-socios').click();
 });
