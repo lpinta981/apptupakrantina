@@ -14,15 +14,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const moduleTitle = document.getElementById('module-title');
     const navLinks = document.querySelectorAll('.nav-link');
     const screenBlocker = document.getElementById('screen-blocker');
-    const logoutBtn = document.getElementById('logout-btn');
+    const appHeader = document.querySelector('header'); // Seleccionamos la cabecera
 
     // --- MANEJO DE EVENTOS ---
     
-    // Evento para cerrar sesión
-    logoutBtn.addEventListener('click', () => {
-        sessionStorage.removeItem('isLoggedIn');
-        window.location.href = 'login.html';
-    });
+    // Evento para cerrar sesión (usando delegación de eventos)
+    if (appHeader) {
+        appHeader.addEventListener('click', (e) => {
+            // Comprueba si el elemento clickeado es el botón de logout o está dentro de él
+            if (e.target.closest('#logout-btn')) {
+                sessionStorage.removeItem('isLoggedIn');
+                window.location.href = 'login.html';
+            }
+        });
+    }
 
     // Eventos para la navegación de módulos
     navLinks.forEach(link => {
