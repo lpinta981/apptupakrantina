@@ -10,7 +10,6 @@ checkAuth();
 document.addEventListener('DOMContentLoaded', () => {
     // --- ESTADO DE LA APLICACIÓN ---
     const moduleCache = {}; // Almacena el HTML de los módulos
-    let currentSubscription = null; // Rastrea la suscripción en tiempo real activa
 
     // --- ELEMENTOS DEL DOM ---
     const mainContent = document.getElementById('contenido-principal');
@@ -21,9 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MANEJO DE EVENTOS ---
     logoutBtn.addEventListener('click', async () => {
-        if (currentSubscription) {
-            supabase.removeChannel(currentSubscription);
-        }
+        sessionStorage.removeItem('socios_cache'); // Limpiar caché al salir
         await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
@@ -38,29 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LÓGICA DE MÓDULOS ---
     const showModule = (moduleName) => {
-        // 1. Limpiar la suscripción anterior antes de cambiar de vista
-        if (currentSubscription) {
-            supabase.removeChannel(currentSubscription);
-            currentSubscription = null;
-            console.log("Suscripción anterior eliminada.");
-        }
-
-        // 2. Ocultar todos los módulos
         Array.from(mainContent.children).forEach(child => child.classList.add('hidden'));
-
-        // 3. Mostrar o cargar el módulo solicitado
         if (moduleCache[moduleName]) {
             moduleCache[moduleName].container.classList.remove('hidden');
+            // Si regresamos al módulo de socios, iniciamos la actualización en segundo plano
+            if (moduleName === 'socios') {
+                backgroundRefreshSocios(); 
+            }
         } else {
             loadModule(moduleName);
         }
-        
-        // 4. Si el nuevo módulo es 'socios', iniciar una nueva suscripción
-        if (moduleName === 'socios') {
-            listenForSocioChanges();
-        }
-
-        // 5. Actualizar UI
         moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
         navLinks.forEach(l => l.classList.toggle('active', l.id === `nav-${moduleName}`));
     };
@@ -85,26 +69,42 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('add-socio-btn').addEventListener('click', () => openEditModal(null));
         document.getElementById('socio-form').addEventListener('submit', handleSocioSubmit);
         document.getElementById('cancel-btn').addEventListener('click', () => document.getElementById('socio-modal').classList.replace('flex', 'hidden'));
-        loadSocios();
+        loadInitialSocios();
     };
 
-    const listenForSocioChanges = () => {
-        console.log("Creando nueva suscripción al canal 'public:socios'...");
-        const channel = supabase.channel('public:socios')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'socios' }, payload => {
-                console.log('Cambio en tiempo real recibido!', payload);
-                loadSocios(); // Recargar la lista de socios al recibir un cambio
-            })
-            .subscribe((status, err) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('¡Conectado al canal de socios!');
-                }
-                if (status === 'CHANNEL_ERROR') {
-                    console.error('Error de conexión en el canal:', err);
-                }
-            });
-        
-        currentSubscription = channel; // Guardar la nueva suscripción como la actual
+    const loadInitialSocios = () => {
+        const cachedSocios = sessionStorage.getItem('socios_cache');
+        if (cachedSocios) {
+            console.log("Cargando socios desde el caché.");
+            renderSocios(JSON.parse(cachedSocios));
+            backgroundRefreshSocios(); // Iniciar actualización en segundo plano
+        } else {
+            console.log("Caché vacío, cargando desde Supabase.");
+            loadSociosFromSupabase();
+        }
+    };
+
+    const backgroundRefreshSocios = async () => {
+        console.log("Actualizando socios en segundo plano...");
+        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
+        if (!error) {
+            sessionStorage.setItem('socios_cache', JSON.stringify(socios));
+            renderSocios(socios);
+            console.log("Caché y vista de socios actualizados.");
+        } else {
+            console.error("Error en la actualización de segundo plano:", error.message);
+        }
+    };
+    
+    const loadSociosFromSupabase = async () => {
+        renderSkeleton();
+        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
+        if (error) {
+            document.getElementById('socios-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
+            return;
+        }
+        sessionStorage.setItem('socios_cache', JSON.stringify(socios));
+        renderSocios(socios);
     };
 
     const renderSkeleton = (rows = 5) => {
@@ -125,23 +125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const loadSocios = async () => {
-        const tableBody = document.getElementById('socios-table-body');
-        if (tableBody.children.length === 0) {
-            renderSkeleton();
-        }
-        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
-        if (error) {
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
-            return;
-        }
-        renderSocios(socios);
-    };
-
     const renderSocios = (socios) => {
         const tableBody = document.getElementById('socios-table-body');
         tableBody.innerHTML = '';
-        if (socios.length === 0) {
+        if (!socios || socios.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">No hay socios registrados.</td></tr>';
             return;
         }
@@ -208,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error al guardar: ' + error.message);
         } else {
             document.getElementById('socio-modal').classList.replace('flex', 'hidden');
+            // Forzar la actualización inmediata después de guardar
+            loadSociosFromSupabase();
         }
         screenBlocker.classList.add('hidden');
     };
