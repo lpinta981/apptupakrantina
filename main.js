@@ -10,6 +10,7 @@ checkAuth();
 document.addEventListener('DOMContentLoaded', () => {
     // --- ESTADO DE LA APLICACIÓN ---
     const moduleCache = {}; // Almacena el HTML de los módulos
+    let sociosData = null; // Caché de datos en memoria para los socios
 
     // --- ELEMENTOS DEL DOM ---
     const mainContent = document.getElementById('contenido-principal');
@@ -20,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MANEJO DE EVENTOS ---
     logoutBtn.addEventListener('click', async () => {
-        sessionStorage.removeItem('socios_cache'); // Limpiar caché al salir
+        sociosData = null; // Limpiar caché de datos al salir
         await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
@@ -36,14 +37,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- LÓGICA DE MÓDULOS ---
     const showModule = (moduleName) => {
         Array.from(mainContent.children).forEach(child => child.classList.add('hidden'));
+        
         if (moduleCache[moduleName]) {
             moduleCache[moduleName].container.classList.remove('hidden');
-            if (moduleName === 'socios') {
-                backgroundRefreshSocios(); 
-            }
         } else {
             loadModule(moduleName);
         }
+        
+        if (moduleName === 'socios') {
+            // Si volvemos a la vista de socios, la renderizamos con los datos cacheados y refrescamos.
+            if (sociosData) {
+                renderSocios(sociosData);
+                backgroundRefreshSocios();
+            }
+        }
+        
         moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
         navLinks.forEach(l => l.classList.toggle('active', l.id === `nav-${moduleName}`));
     };
@@ -68,34 +76,19 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('add-socio-btn').addEventListener('click', () => openEditModal(null));
         document.getElementById('socio-form').addEventListener('submit', handleSocioSubmit);
         document.getElementById('cancel-btn').addEventListener('click', () => document.getElementById('socio-modal').classList.replace('flex', 'hidden'));
-        loadInitialSocios();
+        loadSociosFromSupabase(); // Carga inicial de datos
     };
-
-    const loadInitialSocios = () => {
-        const cachedSocios = sessionStorage.getItem('socios_cache');
-        if (cachedSocios) {
-            console.log("Cargando socios desde el caché.");
-            renderSocios(JSON.parse(cachedSocios));
-            backgroundRefreshSocios();
-        } else {
-            console.log("Caché vacío, cargando desde Supabase.");
-            loadSociosFromSupabase();
-        }
-    };
-
+    
     const backgroundRefreshSocios = async () => {
         console.log("Actualizando socios en segundo plano...");
-        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
+        const { data: freshSocios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
+        
         if (!error) {
-            sessionStorage.setItem('socios_cache', JSON.stringify(socios));
-            // --- CORRECCIÓN DEFINITIVA ---
-            // Solo renderiza si el módulo de socios está visible y su tabla existe
-            const tableBody = document.getElementById('socios-table-body');
-            if (tableBody && !moduleCache.socios.container.classList.contains('hidden')) {
-                renderSocios(socios);
-                console.log("Caché y vista de socios actualizados.");
-            } else {
-                console.log("Caché de socios actualizado, pero la vista está oculta o no disponible.");
+            sociosData = freshSocios; // Actualizar el caché de datos
+            const sociosContainer = moduleCache.socios ? moduleCache.socios.container : null;
+            if (sociosContainer && !sociosContainer.classList.contains('hidden')) {
+                renderSocios(sociosData);
+                console.log("Vista de socios actualizada desde el segundo plano.");
             }
         } else {
             console.error("Error en la actualización de segundo plano:", error.message);
@@ -104,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const loadSociosFromSupabase = async () => {
         renderSkeleton();
-        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
+        const { data: fetchedSocios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
         if (error) {
             const tableBody = document.getElementById('socios-table-body');
             if (tableBody) {
@@ -112,8 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-        sessionStorage.setItem('socios_cache', JSON.stringify(socios));
-        renderSocios(socios);
+        sociosData = fetchedSocios; // Guardar datos en el caché de memoria
+        renderSocios(sociosData);
     };
 
     const renderSkeleton = (rows = 5) => {
@@ -206,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error al guardar: ' + error.message);
         } else {
             document.getElementById('socio-modal').classList.replace('flex', 'hidden');
-            loadSociosFromSupabase();
+            loadSociosFromSupabase(); // Forzar recarga de datos después de guardar
         }
         screenBlocker.classList.add('hidden');
     };
