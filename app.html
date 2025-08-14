@@ -9,6 +9,17 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .nav-link.active { background-color: #F97316; color: white; }
+        /* Estilos para el esqueleto de carga */
+        .skeleton-row .skeleton {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            background-color: #e5e7eb; /* gray-200 */
+            border-radius: 0.25rem;
+        }
+        @keyframes pulse {
+            50% {
+                opacity: .5;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-100">
