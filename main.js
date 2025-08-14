@@ -52,9 +52,26 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSocios();
     };
 
-    const loadSocios = async () => {
+    const renderSkeleton = (rows = 5) => {
         const tableBody = document.getElementById('socios-table-body');
-        tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">Cargando socios...</td></tr>';
+        tableBody.innerHTML = ''; // Limpiar contenido previo
+        for (let i = 0; i < rows; i++) {
+            const tr = document.createElement('tr');
+            tr.className = 'bg-white border-b skeleton-row';
+            tr.innerHTML = `
+                <td class="py-4 px-6"><div class="skeleton h-4 w-3/4"></div></td>
+                <td class="py-4 px-6"><div class="skeleton h-4 w-full"></div></td>
+                <td class="py-4 px-6"><div class="skeleton h-4 w-full"></div></td>
+                <td class="py-4 px-6"><div class="skeleton h-4 w-full"></div></td>
+                <td class="py-4 px-6"><div class="skeleton h-4 w-1/2"></div></td>
+                <td class="py-4 px-6"><div class="skeleton h-4 w-1/4"></div></td>
+            `;
+            tableBody.appendChild(tr);
+        }
+    };
+
+    const loadSocios = async () => {
+        renderSkeleton(); // Acción: Mostrar el esqueleto inmediatamente
 
         const { data: socios, error } = await supabase
             .from('socios')
@@ -62,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .order('Nombres_Completos', { ascending: true });
 
         if (error) {
+            const tableBody = document.getElementById('socios-table-body');
             tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
             return;
         }
