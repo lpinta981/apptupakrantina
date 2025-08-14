@@ -8,6 +8,9 @@ async function checkAuth() {
 checkAuth();
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- ESTADO DE LA APLICACIÓN ---
+    const moduleCache = {}; // Almacena el HTML y estado de los módulos
+
     // --- ELEMENTOS DEL DOM ---
     const mainContent = document.getElementById('contenido-principal');
     const moduleTitle = document.getElementById('module-title');
@@ -17,6 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MANEJO DE EVENTOS ---
     logoutBtn.addEventListener('click', async () => {
+        // Antes de salir, nos aseguramos de cerrar cualquier suscripción abierta
+        if (moduleCache.socios && moduleCache.socios.subscription) {
+            supabase.removeChannel(moduleCache.socios.subscription);
+        }
         await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
@@ -24,37 +31,66 @@ document.addEventListener('DOMContentLoaded', () => {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const module = e.currentTarget.id.split('-')[1];
-            navLinks.forEach(l => l.classList.remove('active'));
-            e.currentTarget.classList.add('active');
-            loadModule(module);
+            const moduleName = e.currentTarget.id.split('-')[1];
+            showModule(moduleName);
         });
     });
 
-    // --- CARGA DE MÓDULOS ---
+    // --- LÓGICA DE MÓDULOS ---
+    const showModule = (moduleName) => {
+        Array.from(mainContent.children).forEach(child => child.classList.add('hidden'));
+        if (moduleCache[moduleName]) {
+            moduleCache[moduleName].container.classList.remove('hidden');
+        } else {
+            loadModule(moduleName);
+        }
+        moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
+        navLinks.forEach(l => l.classList.toggle('active', l.id === `nav-${moduleName}`));
+    };
+
     const loadModule = async (moduleName) => {
         try {
             const response = await fetch(`${moduleName}.html`);
             if (!response.ok) throw new Error(`Módulo no encontrado.`);
-            mainContent.innerHTML = await response.text();
-            moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
+            const moduleHtml = await response.text();
+            const container = document.createElement('div');
+            container.innerHTML = moduleHtml;
+            mainContent.appendChild(container);
+            moduleCache[moduleName] = { container };
             if (moduleName === 'socios') initSociosModule();
         } catch (error) {
             mainContent.innerHTML = `<p class="text-red-500">${error.message}</p>`;
         }
     };
 
-    // --- LÓGICA DEL MÓDULO DE SOCIOS ---
+    // --- LÓGICA ESPECÍFICA DEL MÓDULO DE SOCIOS ---
     const initSociosModule = () => {
         document.getElementById('add-socio-btn').addEventListener('click', () => openEditModal(null));
         document.getElementById('socio-form').addEventListener('submit', handleSocioSubmit);
         document.getElementById('cancel-btn').addEventListener('click', () => document.getElementById('socio-modal').classList.replace('flex', 'hidden'));
         loadSocios();
+        listenForSocioChanges(); // Iniciar la escucha en tiempo real
+    };
+
+    const listenForSocioChanges = () => {
+        const channel = supabase.channel('public:socios')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'socios' }, payload => {
+                console.log('Cambio recibido!', payload);
+                // En lugar de recargar todo, simplemente volvemos a pedir la lista actualizada.
+                // Supabase es tan rápido que esto es casi instantáneo y más simple que manejar cada caso.
+                loadSocios();
+            })
+            .subscribe();
+        
+        // Guardar la suscripción para poder cerrarla al hacer logout
+        if (moduleCache.socios) {
+            moduleCache.socios.subscription = channel;
+        }
     };
 
     const renderSkeleton = (rows = 5) => {
         const tableBody = document.getElementById('socios-table-body');
-        tableBody.innerHTML = ''; // Limpiar contenido previo
+        tableBody.innerHTML = '';
         for (let i = 0; i < rows; i++) {
             const tr = document.createElement('tr');
             tr.className = 'bg-white border-b skeleton-row';
@@ -71,15 +107,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const loadSocios = async () => {
-        renderSkeleton(); // Acción: Mostrar el esqueleto inmediatamente
+        // Solo muestra el esqueleto si la tabla no tiene ya filas
+        const tableBody = document.getElementById('socios-table-body');
+        if (tableBody.children.length === 0) {
+            renderSkeleton();
+        }
 
-        const { data: socios, error } = await supabase
-            .from('socios')
-            .select('*')
-            .order('Nombres_Completos', { ascending: true });
-
+        const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
         if (error) {
-            const tableBody = document.getElementById('socios-table-body');
             tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
             return;
         }
@@ -113,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('socio-form');
         form.reset();
         document.getElementById('modal-title').textContent = socio ? 'Editar Socio' : 'Añadir Nuevo Socio';
-        
         if (socio) {
             form.querySelector('#ID_Socio').value = socio.ID_Socio;
             form.querySelector('#nombres').value = socio.Nombres_Completos;
@@ -132,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
         screenBlocker.classList.remove('hidden');
         const form = e.target;
         const id = form.querySelector('#ID_Socio').value;
-
         const socioData = {
             Nombres_Completos: form.querySelector('#nombres').value,
             Apellidos_Completos: form.querySelector('#apellidos').value,
@@ -145,11 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let error;
         if (id) {
-            // Actualizar socio existente
             const { error: updateError } = await supabase.from('socios').update(socioData).eq('ID_Socio', id);
             error = updateError;
         } else {
-            // Crear nuevo socio
             socioData.ID_Socio = `SOC-${Date.now()}`;
             socioData.Fecha_Ingreso = new Date().toISOString();
             const { error: insertError } = await supabase.from('socios').insert(socioData);
@@ -160,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error al guardar: ' + error.message);
         } else {
             document.getElementById('socio-modal').classList.replace('flex', 'hidden');
-            loadSocios();
+            // No necesitamos llamar a loadSocios() aquí, la suscripción en tiempo real lo hará.
         }
         screenBlocker.classList.add('hidden');
     };
