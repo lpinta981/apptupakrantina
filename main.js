@@ -88,13 +88,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
         if (!error) {
             sessionStorage.setItem('socios_cache', JSON.stringify(socios));
-            // --- CORRECCIÓN ---
-            // Solo renderiza si el módulo de socios está visible
-            if (moduleCache.socios && !moduleCache.socios.container.classList.contains('hidden')) {
+            // --- CORRECCIÓN DEFINITIVA ---
+            // Solo renderiza si el módulo de socios está visible y su tabla existe
+            const tableBody = document.getElementById('socios-table-body');
+            if (tableBody && !moduleCache.socios.container.classList.contains('hidden')) {
                 renderSocios(socios);
                 console.log("Caché y vista de socios actualizados.");
             } else {
-                console.log("Caché de socios actualizado, pero la vista está oculta.");
+                console.log("Caché de socios actualizado, pero la vista está oculta o no disponible.");
             }
         } else {
             console.error("Error en la actualización de segundo plano:", error.message);
@@ -105,7 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSkeleton();
         const { data: socios, error } = await supabase.from('socios').select('*').order('Nombres_Completos', { ascending: true });
         if (error) {
-            document.getElementById('socios-table-body').innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
+            const tableBody = document.getElementById('socios-table-body');
+            if (tableBody) {
+                tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 text-red-500">Error: ${error.message}</td></tr>`;
+            }
             return;
         }
         sessionStorage.setItem('socios_cache', JSON.stringify(socios));
@@ -114,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderSkeleton = (rows = 5) => {
         const tableBody = document.getElementById('socios-table-body');
-        if (!tableBody) return; // Añadir verificación
+        if (!tableBody) return; 
         tableBody.innerHTML = '';
         for (let i = 0; i < rows; i++) {
             const tr = document.createElement('tr');
@@ -133,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderSocios = (socios) => {
         const tableBody = document.getElementById('socios-table-body');
-        if (!tableBody) return; // Añadir verificación
+        if (!tableBody) return;
         tableBody.innerHTML = '';
         if (!socios || socios.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8">No hay socios registrados.</td></tr>';
