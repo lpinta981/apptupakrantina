@@ -43,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const switchView = async (moduleName) => {
         if (app.activeModule === moduleName) return; // No hacer nada si ya está activa
 
-        // Ocultar el módulo que estaba activo
         if (app.activeModule && app.modules[app.activeModule]?.container) {
             app.modules[app.activeModule].container.classList.add('hidden');
         }
@@ -52,10 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const module = app.modules[moduleName];
 
         if (module && module.container) {
-            // Si el módulo ya fue cargado, simplemente se muestra
             module.container.classList.remove('hidden');
+            // --- MEJORA ---
+            // Si regresamos a la vista de socios, disparamos una actualización inmediata.
+            if (moduleName === 'socios') {
+                fetchAndRenderSocios(true); // true para que sea en segundo plano
+            }
         } else {
-            // Si es la primera vez, se carga el HTML y se inicializa
             try {
                 const response = await fetch(`${moduleName}.html`);
                 if (!response.ok) {
@@ -71,16 +73,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (module) module.container = container;
 
-                // Inicializar la lógica específica de cada módulo
                 if (moduleName === 'socios') initSociosModule();
-                // if (moduleName === 'aportes') initAportesModule(); // Ejemplo para el futuro
 
             } catch (error) {
                 console.error(`Error al cargar el módulo ${moduleName}:`, error);
             }
         }
 
-        // Actualizar la UI (título y menú)
         moduleTitle.textContent = `Módulo de ${moduleName.charAt(0).toUpperCase() + moduleName.slice(1)}`;
         navLinks.forEach(l => l.classList.toggle('active', l.id === `nav-${moduleName}`));
     };
@@ -106,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        app.modules.socios.data = data; // Guardar los datos en el estado de la app
+        app.modules.socios.data = data;
         renderSocios(data);
     };
     
@@ -207,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error al guardar: ' + error.message);
         } else {
             app.modules.socios.container.querySelector('#socio-modal').classList.replace('flex', 'hidden');
-            fetchAndRenderSocios(); // Forzar recarga de datos después de guardar
+            fetchAndRenderSocios();
         }
         screenBlocker.classList.add('hidden');
     };
@@ -216,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         if (app.activeModule === 'socios') {
             console.log("Actualización automática de socios...");
-            fetchAndRenderSocios(true); // true indica que es una actualización de fondo
+            fetchAndRenderSocios(true);
         }
     }, 30000); // Cada 30 segundos
 
