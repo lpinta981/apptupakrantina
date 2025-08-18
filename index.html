@@ -1,17 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <title>Cargando...</title>
-    <script>
-        // Redirige al usuario a la página correcta basado en su estado de login.
-        if (sessionStorage.getItem('isLoggedIn') === 'true') {
-            window.location.href = 'app.html';
-        } else {
-            window.location.href = 'login.html';
-        }
-    </script>
+  <meta charset="utf-8" />
+  <title>Cargando…</title>
+  <script type="module">
+    const saved = JSON.parse(localStorage.getItem('directus_auth') || 'null');
+    if (saved?.access_token && saved?.refresh_token) {
+      location.href = 'app.html';
+    } else {
+      location.href = 'login.html';
+    }
+  </script>
 </head>
 <body>
-    <p>Cargando aplicación...</p>
+  <p>Cargando aplicación…</p>
 </body>
 </html>
