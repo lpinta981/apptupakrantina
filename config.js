@@ -1,7 +1,16 @@
 // config.js — Directus con tokens (Bearer) y refresh vía REST
 export const DIRECTUS_URL = 'https://directus.luispinta.com';
+
+// === Socios (compat: mantiene nombres ya usados) ===
 export const COLLECTION   = 'socios';
 export const PRIMARY_KEY  = 'ID_Socio';
+// === Nombres explícitos (por claridad) ===
+export const SOCIOS_COLLECTION = COLLECTION;
+export const SOCIOS_PK        = PRIMARY_KEY;
+
+// === Aportes ===
+export const APORTES_COLLECTION = 'aportes';
+export const APORTES_PK         = 'ID_Aporte';
 
 import {
   createDirectus, rest, authentication, realtime
@@ -10,13 +19,11 @@ import {
 export function getClient() {
   const c = createDirectus(DIRECTUS_URL)
     .with(rest())
-    .with(authentication())   // tokens (Bearer)
+    .with(authentication())
     .with(realtime());
 
   const saved = getSavedTokens();
-  if (saved?.access_token) c.setToken(saved.access_token);     // ✅ sólo setToken
-  // ⚠️ NO llamar a setRefreshToken (no existe en tu build)
-
+  if (saved?.access_token) c.setToken(saved.access_token);
   return c;
 }
 
@@ -31,9 +38,7 @@ export function getSavedTokens() {
   catch { return null; }
 }
 
-/**
- * Refresca tokens usando /auth/refresh (REST). Devuelve true si renovó.
- */
+/** Refresca tokens usando /auth/refresh (REST). Devuelve true si renovó. */
 export async function tryRefresh(client) {
   const saved = getSavedTokens();
   if (!saved?.refresh_token) return false;
@@ -52,6 +57,6 @@ export async function tryRefresh(client) {
   if (!access_token || !refresh_token) return false;
 
   saveTokens({ access_token, refresh_token });
-  client.setToken?.(access_token);   // carga el nuevo access token en el cliente
+  client.setToken?.(access_token);
   return true;
 }
